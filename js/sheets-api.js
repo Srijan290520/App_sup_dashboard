@@ -1,7 +1,7 @@
-// Google Sheets API Integration - Updated with new CORS-enabled deployment
+// Google Sheets API Integration - Updated with CORS-enabled deployment
 if (!window.SHEETS_API_URL) {
-    window.SHEETS_API_URL = "https://script.google.com/macros/s/AKfycbzlg4HchoybjPHcRBcRb8xJzg39hIi48ybacpFc9YUN2fAoVrWR5rAd7S8_EPpbfTH2/exec";
-    console.log("Using updated SHEETS_API_URL with CORS support");
+    window.SHEETS_API_URL = "https://script.google.com/macros/s/AKfycbyY300vYmtv3efNjK0unfG73Y--rGTW8ONeQKEs3F4-QTuTk7gjTZxwcJ0-dbjLkq_Y/exec";
+    console.log("Using updated SHEETS_API_URL with proper CORS support");
 }
 
 // No caching to ensure fresh data every time
