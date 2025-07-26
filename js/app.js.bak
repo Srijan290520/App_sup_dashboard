@@ -1,0 +1,638 @@
+// Main dashboard application
+document.addEventListener('DOMContentLoaded', function() {
+    // Constants
+    const ISSUE_TARGET_MINUTES = 30;
+    const BILLING_TARGET_MINUTES = 5;
+    const AUTO_REFRESH_INTERVAL = 60000; // 1 minute
+    
+    // Helper function to directly debug DOM elements
+    function debugElement(id) {
+        const element = document.getElementById(id);
+        console.log(`DOM Debug for #${id}:`, {
+            exists: !!element,
+            tagName: element ? element.tagName : 'N/A',
+            innerText: element ? element.innerText : 'N/A',
+            textContent: element ? element.textContent : 'N/A',
+            innerHTML: element ? element.innerHTML : 'N/A',
+            style: element ? element.style.cssText : 'N/A'
+        });
+        return element;
+    }
+    
+    // Check if charts need initialization
+    let issuesChart = Chart.getChart('issuesChart');
+    let billingChart = Chart.getChart('billingChart');
+    
+    // Initialize charts if not already initialized
+    if (typeof initializeCharts === 'function' && (!issuesChart || !billingChart)) {
+        initializeCharts();
+    }
+
+    // Chart configuration
+    const chartConfig = {
+        type: 'bar',
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: {
+                padding: {
+                    top: 20,
+                    right: 20,
+                    bottom: 20,
+                    left: 20
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    align: 'end',
+                    labels: {
+                        boxWidth: 12,
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        padding: 20
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { 
+                        precision: 0,
+                        font: {
+                            size: 12
+                        }
+                    },
+                    grid: {
+                        color: '#e2e8f0'
+                    }
+                },
+                x: {
+                    ticks: {
+                        font: {
+                            size: 12
+                        }
+                    },
+                    grid: {
+                        display: false
+                    }
+                }
+            },
+            barThickness: 20,
+            maxBarThickness: 30,
+            borderRadius: 4,
+            animation: {
+                duration: 500
+            }
+        }
+    };
+
+    // Helper function to convert to IST timezone
+    function formatDateToIST(date) {
+        if (!date) return '';
+        
+        // Convert to IST (UTC+5:30)
+        const options = { 
+            timeZone: 'Asia/Kolkata',
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        };
+        
+        return new Date(date).toLocaleString('en-IN', options);
+    }
+    
+        // Helper function to format dates in IST timezone
+    function formatDateToIST(date) {
+        if (!date) return '';
+        
+        // Convert to IST (UTC+5:30)
+        const options = { 
+            timeZone: 'Asia/Kolkata',
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        };
+        
+        return new Date(date).toLocaleString('en-IN', options);
+    }
+    
+    // Update KPIs and counters - exposed globally for access from other files
+    window.updateCounters = async function() {
+        console.log("Starting updateCounters function...");
+        
+        try {
+            // Fetch fresh data directly from the API
+            const issues = await fetchIssues();
+            const billing = await fetchBilling();
+            
+            console.log("Successfully fetched data:", {
+                issues: issues ? issues.length : 0,
+                billing: billing ? billing.length : 0
+            });
+            
+        } catch (error) {
+            console.error("Error in updateCounters:", error);
+        }
+        
+        // Return a resolved promise to ensure proper chaining
+        return Promise.resolve();
+    }
+
+    async function calculateAverageResolveTime() {
+        const issues = await fetchIssues();
+        const resolvedIssues = issues.filter(issue => issue.status === 'Resolved' && issue.resolveTime && issue.createdAt);
+        
+        if (resolvedIssues.length === 0) return 0;
+        
+        const totalMinutes = resolvedIssues.reduce((acc, issue) => {
+            const created = new Date(issue.createdAt);
+            const resolved = new Date(issue.resolveTime);
+            const diffMinutes = (resolved - created) / (1000 * 60);
+            return acc + diffMinutes;
+        }, 0);
+        
+        return Math.round(totalMinutes / resolvedIssues.length);
+    }
+
+    async function calculateAverageBillingResolveTime() {
+        const billing = await fetchBilling();
+        const resolvedBilling = billing.filter(item => item.status === 'Resolved' && item.resolveTime && item.createdAt);
+        
+        if (resolvedBilling.length === 0) return 0;
+        
+        const totalMinutes = resolvedBilling.reduce((acc, item) => {
+            const created = new Date(item.createdAt);
+            const resolved = new Date(item.resolveTime);
+            const diffMinutes = (resolved - created) / (1000 * 60);
+            return acc + diffMinutes;
+        }, 0);
+        
+        return Math.round(totalMinutes / resolvedBilling.length);
+    }
+
+    async function updateCharts() {
+        // Get existing charts
+        issuesChart = Chart.getChart('issuesChart');
+        billingChart = Chart.getChart('billingChart');
+        
+        // If charts don't exist, don't try to update them
+        if (!issuesChart || !billingChart) {
+            return;
+        }
+        
+        // Get data directly from Google Sheets without caching
+        let issues = [];
+        let billing = [];
+        try {
+            // Check if we should use fallback data
+            if (window.useFallbackData) {
+                console.log("Chart update: Using fallback data");
+                issues = window.FALLBACK_DATA.issues || [];
+                billing = window.FALLBACK_DATA.billing || [];
+                console.log("Fallback chart data loaded:", {
+                    issues: issues.length,
+                    billing: billing.length
+                });
+                // This needs to exit the entire try block
+                return Promise.resolve(); // Exit the entire function with a resolved promise
+            }
+            
+            console.log("Chart update: Getting fresh data from Google Sheets");
+            const cacheBuster = Date.now();
+            const fetchOptions = {
+                method: 'GET',
+                mode: 'cors',
+                headers: {
+                    'Accept': 'application/json, text/plain, */*'
+                },
+                signal: AbortSignal.timeout(8000) // 8 seconds timeout
+            };
+            
+            // Helper function to retry fetch with exponential backoff
+            const fetchWithRetry = async (url, options, retries = 2) => {
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status} ${response.statusText}`);
+                    }
+                    return response;
+                } catch (error) {
+                    if (retries === 0) throw error;
+                    console.warn(`Chart data fetch failed, retrying... (${retries} attempts left)`);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    return fetchWithRetry(url, options, retries - 1);
+                }
+            };
+            
+            try {
+                console.log(`Chart: Fetching issues from: ${window.SHEETS_API_URL}`);
+                const issuesResponse = await fetchWithRetry(
+                    `${window.SHEETS_API_URL}?action=get&sheet=Issues&_=${cacheBuster}`, 
+                    fetchOptions
+                );
+                const issuesResult = await issuesResponse.json();
+                issues = issuesResult || [];
+                
+                const billingResponse = await fetchWithRetry(
+                    `${window.SHEETS_API_URL}?action=get&sheet=Billing&_=${cacheBuster}`, 
+                    fetchOptions
+                );
+                const billingResult = await billingResponse.json();
+                billing = billingResult || [];
+            } catch (apiError) {
+                console.error("Primary API failed for chart data:", apiError);
+                
+                if (window.ALTERNATE_SHEETS_API_URL) {
+                    console.log("Trying alternate API URL for chart data");
+                    const altIssuesResponse = await fetchWithRetry(
+                        `${window.ALTERNATE_SHEETS_API_URL}?action=get&sheet=Issues&_=${cacheBuster}`, 
+                        fetchOptions
+                    );
+                    const altIssuesResult = await altIssuesResponse.json();
+                    issues = altIssuesResult || [];
+                    
+                    const altBillingResponse = await fetchWithRetry(
+                        `${window.ALTERNATE_SHEETS_API_URL}?action=get&sheet=Billing&_=${cacheBuster}`, 
+                        fetchOptions
+                    );
+                    const altBillingResult = await altBillingResponse.json();
+                    billing = altBillingResult || [];
+                } else {
+                    throw apiError;
+                }
+            }
+            
+            console.log("Chart data retrieved:", {
+                issues: issues.length,
+                billing: billing.length
+            });
+        } catch (error) {
+            console.error("Error fetching chart data, falling back to cache:", error);
+            // Fall back to cached functions
+            issues = await fetchIssues();
+            billing = await fetchBilling();
+        }
+        
+        // Process data for issues chart
+        const issuesData = {};
+        issues.forEach(issue => {
+            if (!issue.createdAt) return;
+            const date = new Date(issue.createdAt);
+            const monthYear = date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+            
+            if (!issuesData[monthYear]) {
+                issuesData[monthYear] = { total: 0, resolved: 0 };
+            }
+            
+            issuesData[monthYear].total++;
+            if (issue.status === 'Resolved') {
+                issuesData[monthYear].resolved++;
+            }
+        });
+        
+        // Process data for billing chart
+        const billingData = {};
+        billing.forEach(item => {
+            if (!item.createdAt) return;
+            const date = new Date(item.createdAt);
+            const monthYear = date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+            
+            if (!billingData[monthYear]) {
+                billingData[monthYear] = { total: 0, resolved: 0 };
+            }
+            
+            billingData[monthYear].total++;
+            if (item.status === 'Resolved') {
+                billingData[monthYear].resolved++;
+            }
+        });
+        
+        // Get months starting from June 2025
+        const months = getLastNMonths(6);
+        console.log("Chart months:", months); // Debug output
+        
+        // Update issues chart
+        issuesChart.data.labels = months;
+        issuesChart.data.datasets[0].data = months.map(month => issuesData[month] ? issuesData[month].total : 0);
+        if (issuesChart.data.datasets.length > 1) {
+            issuesChart.data.datasets[1].data = months.map(month => issuesData[month] ? issuesData[month].resolved : 0);
+        }
+        issuesChart.update();
+        
+        // Update billing chart
+        billingChart.data.labels = months;
+        billingChart.data.datasets[0].data = months.map(month => billingData[month] ? billingData[month].total : 0);
+        if (billingChart.data.datasets.length > 1) {
+            billingChart.data.datasets[1].data = months.map(month => billingData[month] ? billingData[month].resolved : 0);
+        }
+        billingChart.update();
+    }
+    
+    // Function to get months from June onwards
+    function getLastNMonths(n = 6) {
+        const months = [];
+        // Set starting month to June 2025
+        const startMonth = 5; // 0-indexed, so 5 is June
+        const startYear = 2025;
+        
+        for (let i = 0; i < n; i++) {
+            // Calculate month and year, handling year boundaries
+            const adjustedMonth = startMonth + i;
+            const year = startYear + Math.floor(adjustedMonth / 12);
+            const month = adjustedMonth % 12;
+            
+            const monthDate = new Date(year, month, 1);
+            const monthYear = monthDate.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+            months.push(monthYear);
+        }
+        
+        return months;
+    }
+
+    // Set current page as active in navigation
+    const currentPage = window.location.pathname.split('/').pop() || 'index.html';
+    const activeLink = document.querySelector(`nav a[href="${currentPage}"]`);
+    if (activeLink) {
+        activeLink.classList.add('active');
+    }
+
+    // Update metrics when issues or billing are updated
+    document.addEventListener('issuesUpdated', () => {
+        // Clear cache to ensure fresh data
+        if (typeof clearCaches === 'function') {
+            clearCaches();
+        }
+        updateCounters().then(() => updateCharts());
+    });
+    document.addEventListener('billingUpdated', () => {
+        // Clear cache to ensure fresh data
+        if (typeof clearCaches === 'function') {
+            clearCaches();
+        }
+        updateCounters().then(() => updateCharts());
+    });
+    window.addEventListener('storage', () => {
+        updateCounters().then(() => updateCharts());
+    });
+
+    // Check Google Sheets setup before initial update
+    if (typeof checkSheetsSetup === 'function') {
+        checkSheetsSetup().then(result => {
+            console.log("Google Sheets setup check result:", result);
+            if (!result.success) {
+                console.error("Google Sheets setup is not correct. Please check the console for errors.");
+                alert("There was an issue connecting to Google Sheets. Check console for details.");
+            }
+        });
+    }
+    
+    // Add refresh button functionality
+    const refreshButton = document.getElementById('refresh-dashboard');
+    if (refreshButton) {
+        refreshButton.addEventListener('click', async () => {
+            console.log("Refresh button clicked - starting manual refresh process");
+            refreshButton.innerHTML = "<span class='spinner'>↻</span> Refreshing...";
+            refreshButton.disabled = true;
+            
+            try {
+                // Force refresh data directly from Google Sheets
+                console.log("Forcing direct data refresh from Google Sheets");
+                
+                // First, clear any caches
+                if (typeof clearCaches === 'function') {
+                    clearCaches();
+                    console.log("Cache cleared");
+                }
+                
+                // Then manually verify the URL is accessible
+                if (!window.SHEETS_API_URL) {
+                    console.error("SHEETS_API_URL is not defined globally!");
+                    window.SHEETS_API_URL = "https://script.google.com/macros/s/AKfycbxQigoumuK4A4aenWdsAJ8OdFHTslNzYqXNBkC77HStjb3C9uimr0ON1K1dHNHdvtmg/exec";
+                    console.log("Restored SHEETS_API_URL:", window.SHEETS_API_URL);
+                }
+                
+                // Test the connection and try each backup URL
+                const connectionSuccessful = await window.testSheetsConnection();
+                
+                if (!connectionSuccessful) {
+                    console.warn("All API URLs failed, switching to fallback data");
+                    window.useFallbackData = true;
+                    
+                    // Show notification to the user
+                    const notification = document.createElement('div');
+                    notification.style.cssText = 'position:fixed;top:10px;right:10px;background:#ff6b6b;color:white;padding:12px;border-radius:5px;z-index:1000;box-shadow:0 2px 10px rgba(0,0,0,0.2);font-size:14px;';
+                    notification.innerHTML = `<strong>Connection Error:</strong> Could not connect to Google Sheets.<br>Using sample data instead.`;
+                    document.body.appendChild(notification);
+                    
+                    // Fade out the notification after 5 seconds
+                    setTimeout(() => {
+                        notification.style.transition = 'opacity 1s ease';
+                        notification.style.opacity = '0';
+                        setTimeout(() => notification.remove(), 1000);
+                    }, 5000);
+                } else {
+                    console.log("Successfully connected to Google Sheets API");
+                    window.useFallbackData = false;
+                }
+                
+                // Add some CSS animation to the button
+                const style = document.createElement('style');
+                style.textContent = `
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                    .spinner {
+                        display: inline-block;
+                        animation: spin 1s linear infinite;
+                    }
+                `;
+                document.head.appendChild(style);
+                
+                console.log("Starting UI update with fresh data");
+                
+                try {
+                    // Update UI with fresh data - with more detailed error trapping
+                    console.log("Calling updateCounters()...");
+                    await updateCounters();
+                    console.log("✓ updateCounters() completed successfully");
+                    
+                    console.log("Calling updateCharts()...");
+                    await updateCharts();
+                    console.log("✓ updateCharts() completed successfully");
+                } catch (updateError) {
+                    console.error("Error during update process:", updateError);
+                    throw updateError; // Re-throw to be caught by the outer catch block
+                }
+                
+                // Show immediate visual feedback for the user
+                const allElements = [
+                    'total-issues',
+                    'resolved-issues', 
+                    'total-billing', 
+                    'approved-billing', 
+                    'avg-resolve-time', 
+                    'resolved-in-target',
+                    'billing-resolve-time',
+                    'billing-in-target'
+                ];
+                
+                // Add visual flash effect to indicate the numbers have been updated
+                allElements.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        // Add highlight effect
+                        el.style.transition = 'background-color 0.5s ease';
+                        el.style.backgroundColor = '#ffff99';
+                        setTimeout(() => {
+                            el.style.backgroundColor = 'transparent';
+                            setTimeout(() => {
+                                el.style.transition = '';
+                            }, 500);
+                        }, 500);
+                    }
+                });
+                
+                // Show success feedback
+                refreshButton.innerHTML = "✓ Refreshed";
+                console.log("Refresh complete");
+                
+                // Check if elements were updated successfully
+                console.log("=== FINAL DOM ELEMENT CHECK ===");
+                debugElement('total-issues');
+                debugElement('resolved-issues');
+                debugElement('total-billing');
+                debugElement('approved-billing');
+                debugElement('avg-resolve-time');
+                debugElement('resolved-in-target');
+                debugElement('billing-resolve-time');
+                debugElement('billing-in-target');
+                console.log("=== END FINAL CHECK ===");
+                
+                setTimeout(() => {
+                    refreshButton.innerHTML = "↻ Refresh Dashboard";
+                    refreshButton.disabled = false;
+                }, 1500);
+            } catch (error) {
+                console.error("Error refreshing dashboard:", error);
+                refreshButton.innerHTML = "✗ Refresh Failed";
+                
+                // Create a more specific error message
+                let errorMessage = "Could not refresh dashboard data.";
+                
+                if (error.message && error.message.includes("SHEETS_API_URL")) {
+                    errorMessage = "Google Sheets URL is missing or invalid.";
+                } else if (error.message && (error.message.includes("fetch") || error.message.includes("network"))) {
+                    errorMessage = "Could not connect to Google Sheets. Check your internet connection.";
+                } else if (error.message && (error.message.includes("401") || error.message.includes("403"))) {
+                    errorMessage = "Permission denied accessing Google Sheets. Check your permissions.";
+                } else if (error.message && error.message.includes("parse")) {
+                    errorMessage = "Invalid data received from Google Sheets.";
+                }
+                
+                // Try to recover by updating with cached data if available
+                try {
+                    console.log("Attempting to use cached data for recovery...");
+                    
+                    // Create a notification to show the user
+                    const notification = document.createElement('div');
+                    notification.style.cssText = 'position:fixed;top:10px;right:10px;background:#ff6b6b;color:white;padding:10px;border-radius:5px;z-index:1000;box-shadow:0 2px 10px rgba(0,0,0,0.2);';
+                    notification.innerHTML = `<strong>Error:</strong> ${errorMessage}<br>Falling back to cached data...`;
+                    document.body.appendChild(notification);
+                    
+                    // Remove the notification after 5 seconds
+                    setTimeout(() => {
+                        notification.style.opacity = '0';
+                        notification.style.transition = 'opacity 0.5s ease';
+                        setTimeout(() => notification.remove(), 500);
+                    }, 5000);
+                    
+                    // Use cached data as fallback
+                    if (typeof fetchIssues === 'function' && typeof fetchBilling === 'function') {
+                        const cachedIssues = await fetchIssues();
+                        const cachedBilling = await fetchBilling();
+                        
+                        if (cachedIssues.length > 0 || cachedBilling.length > 0) {
+                            console.log("Using cached data for recovery:", {
+                                issues: cachedIssues.length,
+                                billing: cachedBilling.length
+                            });
+                        }
+                    }
+                } catch (fallbackError) {
+                    console.error("Even fallback recovery failed:", fallbackError);
+                }
+                
+                setTimeout(() => {
+                    refreshButton.innerHTML = "↻ Refresh Dashboard";
+                    refreshButton.disabled = false;
+                }, 1500);
+            }
+        });
+    }
+    
+    // Add event listener for the reset API button
+    const resetApiButton = document.getElementById('reset-api');
+    if (resetApiButton) {
+        resetApiButton.addEventListener('click', async () => {
+            console.log("Reset API button clicked");
+            resetApiButton.textContent = "Resetting...";
+            resetApiButton.disabled = true;
+            
+            // Reset the API URLs to the originals
+            window.useFallbackData = false;
+            window.SHEETS_API_URL = "https://script.google.com/macros/s/AKfycbwgu7VKbE1nueInVpJHlVmbICnODbo6MFtdzS7T_7N8XyaQIpJF5F_9ddBjFXaq2z2F/exec";
+            
+            // Remove any error messages
+            const errorNotifications = document.querySelectorAll('div[style*="position:fixed"]');
+            errorNotifications.forEach(notification => notification.remove());
+            
+            // Test the connection again
+            const connectionSuccessful = await window.testSheetsConnection();
+            
+            if (connectionSuccessful) {
+                resetApiButton.textContent = "Connection Restored!";
+                setTimeout(() => {
+                    resetApiButton.textContent = "Reset API Connection";
+                    resetApiButton.disabled = false;
+                    
+                    // Refresh the dashboard
+                    const refreshButton = document.getElementById('refresh-dashboard');
+                    if (refreshButton) refreshButton.click();
+                }, 1500);
+            } else {
+                resetApiButton.textContent = "Reset Failed";
+                setTimeout(() => {
+                    resetApiButton.textContent = "Reset API Connection";
+                    resetApiButton.disabled = false;
+                }, 1500);
+            }
+        });
+    }
+    
+    // Initial update and setup auto-refresh
+    updateCounters().then(() => {
+        // Debug all DOM elements directly after updating
+        console.log("=== DIRECT DOM ELEMENT INSPECTION AFTER UPDATE ===");
+        debugElement('total-issues');
+        debugElement('resolved-issues');
+        debugElement('total-billing');
+        debugElement('approved-billing');
+        debugElement('avg-resolve-time');
+        debugElement('resolved-in-target');
+        debugElement('billing-resolve-time');
+        debugElement('billing-in-target');
+        console.log("=== END DIRECT DOM ELEMENT INSPECTION ===");
+        
+        updateCharts();
+    });
+    
+    setInterval(() => {
+        updateCounters().then(() => updateCharts());
+    }, AUTO_REFRESH_INTERVAL);
+});

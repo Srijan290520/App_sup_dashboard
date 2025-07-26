@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Billing Corrections - IT Support Dashboard</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <header class="dashboard-header">
+        <h1>IT Application Support Dashboard</h1>
+        <nav>
+            <ul>
+                <li><a href="index.html">Overview</a></li>
+                <li><a href="issues.html">Application Issues</a></li>
+                <li><a href="billing.html" class="active">Billing Corrections</a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        <div class="dashboard-summary">
+            <div class="summary-card">
+                <h2>Total Billing Corrections</h2>
+                <span id="total-billing">0</span>
+                <div class="kpi">
+                    <small>Approved</small>
+                    <span id="approved-billing">0</span>
+                </div>
+            </div>
+            <div class="summary-card">
+                <h2>Average Bill Time</h2>
+                <span id="billing-resolve-time">0min</span>
+                <div class="kpi">
+                    <small>Within 5min</small>
+                    <span id="billing-in-target">0</span>
+                </div>
+            </div>
+        </div>
+        <section id="billing">
+            <h2>Billing Corrections</h2>
+            <button id="add-billing">Add Billing Correction</button>
+            <div class="table-container">
+                <table id="billing-table" class="dashboard-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Customer</th>
+                            <th>Invoice</th>
+                            <th>Amount</th>
+                            <th>Reason</th>
+                            <th>Status</th>
+                            <th>Resolve Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="billing-list"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    <footer>
+        <p>&copy; 2023 IT Application Support Team</p>
+    </footer>
+    <script src="js/sheets-api.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/billing.js"></script>
+</body>
+</html>

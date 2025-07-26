@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IT Application Support Dashboard</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <header class="dashboard-header">
+        <h1>IT Application Support Dashboard</h1>
+        <nav>
+            <ul>
+                <li><a href="index.html" class="active">Overview</a></li>
+                <li><a href="issues.html">Application Issues</a></li>
+                <li><a href="billing.html">Billing Corrections</a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        <div class="dashboard-summary">
+            <div class="summary-card">
+                <h2>Issues</h2>
+                <span id="total-issues">0</span>
+                <div class="kpi">
+                    <small>Resolved</small>
+                    <span id="resolved-issues">0</span>
+                </div>
+            </div>
+            <div class="summary-card">
+                <h2>Billing Corrections</h2>
+                <span id="total-billing">0</span>
+                <div class="kpi">
+                    <small>Approved</small>
+                    <span id="approved-billing">0</span>
+                </div>
+            </div>
+            <div class="summary-card">
+                <h2>Issue Resolve Time</h2>
+                <span id="avg-resolve-time">0min</span>
+                <div class="kpi">
+                    <small>Within 30min</small>
+                    <span id="resolved-in-target">0</span>
+                </div>
+            </div>
+            <div class="summary-card">
+                <h2>Bill Resolve Time</h2>
+                <span id="billing-resolve-time">0min</span>
+                <div class="kpi">
+                    <small>Within 5min</small>
+                    <span id="billing-in-target">0</span>
+                </div>
+            </div>
+        </div>
+        <div class="charts-container">
+            <div class="chart-card">
+                <h2>Monthly Issues Overview</h2>
+                <canvas id="issuesChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h2>Monthly Billing Overview</h2>
+                <canvas id="billingChart"></canvas>
+            </div>
+        </div>
+        <footer>
+            <p>Auto-refreshes every minute</p>
+        </footer>
+                    <a href="issues.html" class="action-button">
+                        <span class="action-icon">📝</span>
+                        <span class="action-text">New Issue</span>
+                    </a>
+                    <a href="billing.html" class="action-button">
+                        <span class="action-icon">💰</span>
+                        <span class="action-text">New Billing Correction</span>
+                    </a>
+                </div>
+            </section>
+        </div>
+    </main>
+    <footer>
+        <p>&copy; 2023 IT Application Support Team</p>
+    </footer>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.3/dist/chart.umd.min.js"></script>
+    <script>
+        // Don't define SHEETS_API_URL here - let it use the fallback from sheets-api.js
+        // This matches exactly how billing.html and issues.html work
+    </script>
+    <script src="js/sheets-api.js"></script>
+    <script src="js/chart.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/index.js"></script>
+</body>
+</html>

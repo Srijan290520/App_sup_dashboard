@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Application Issues - IT Support Dashboard</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <header class="dashboard-header">
+        <h1>IT Application Support Dashboard</h1>
+        <nav>
+            <ul>
+                <li><a href="index.html">Overview</a></li>
+                <li><a href="issues.html" class="active">Application Issues</a></li>
+                <li><a href="billing.html">Billing Corrections</a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        <div class="dashboard-summary">
+            <div class="summary-card">
+                <h2>Issues</h2>
+                <span id="total-issues">0</span>
+                <div class="kpi">
+                    <small>Resolved</small>
+                    <span id="resolved-issues">0</span>
+                </div>
+            </div>
+            <div class="summary-card">
+                <h2>Issue Resolve Time</h2>
+                <span id="avg-resolve-time">0min</span>
+                <div class="kpi">
+                    <small>Within 30min</small>
+                    <span id="resolved-in-target">0</span>
+                </div>
+            </div>
+        </div>
+        <section id="issues">
+            <h2>Application Issues</h2>
+            <button id="add-issue">Add Issue</button>
+            <div class="table-container">
+                <table id="issues-table" class="dashboard-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Reporter</th>
+                            <th>Department</th>
+                            <th>Title</th>
+                            <th>Description</th>
+                            <th>Status</th>
+                            <th>Resolution Time</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="issues-list"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    <footer>
+        <p>&copy; 2023 IT Application Support Team</p>
+    </footer>
+    <script src="js/sheets-api.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/issues.js"></script>
+</body>
+</html>
